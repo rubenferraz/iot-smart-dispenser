@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Comedouro Automático</title>
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      padding: 30px;
+      min-height: 100vh;
+      margin: 0;
+      color: #222;
+      background: url('/static/cat.png') no-repeat center center fixed;
+      background-size: cover;
+    }
+
+    #peso { 
+      font-size: 28px; 
+      margin: 20px 0; 
+      color: #044e8c;
+    }
+
+    img { 
+      max-width: 100%; 
+      width: 480px; /* Definindo o tamanho fixo */
+      border-radius: 10px; 
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    button { 
+      margin-top: 10px; 
+      font-size: 18px; 
+      padding: 8px 15px; 
+      border: none;
+      border-radius: 6px;
+      background-color: #0575e6;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #034aad;
+    }
+
+    #liveStreamButton {
+      margin-top: 20px;
+      font-size: 18px;
+      padding: 10px 20px;
+      background-color: #f36f6f;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #liveStreamButton:hover {
+      background-color: #c24e4e;
+    }
+
+    #stream {
+      display: none;
+    }
+
+  </style>
+</head>
+<body>
+  <h1>🐱 Comedouro Automático</h1>
+
+  <h2>📦 Peso Atual</h2>
+  <div id="pesoBox">
+    <div id="peso">-- g</div>
+  </div>
+
+  <h2>🎥 Stream da Câmera</h2>
+  <!-- Botão que abre o link do stream em uma nova aba -->
+  <button id="liveStreamButton" onclick="openStream()">Para acessar o live stream, clique aqui</button>
+
+  <!-- Stream da câmera -->
+  <img
+    id="stream"
+    src="https://83.212.82.121:8080/"
+    style="width: 100%; max-width: 480px; border-radius: 10px; display: none;"  <!-- Inicialmente oculto -->
+  />
+
+  <h2>⏰ Agendar Motor</h2>
+  <input
+    type="datetime-local"
+    id="datetimeMotor"
+    aria-label="Selecionar data e hora para agendar o motor"
+  />
+  <button id="agendarBtn" onclick="agendarMotor()">Agendar</button>
+
+  <br /><br />
+  <button onclick="rodar()">Rodar Motor ➡️</button>
+
+  <h3>Agendamentos Atuais</h3>
+  <div id="agendamentosList">A carregar...</div>
+
+  <script>
+    async function atualizarPeso() {
+      const res = await fetch("/peso");
+      const data = await res.json();
+      document.getElementById("peso").innerText = data.peso.toFixed(2) + " g";
+    }
+
+    async function rodar() {
+      await fetch("/motor", { method: "POST" });
+      alert("Motor vai rodar!");
+    }
+
+    async function agendarMotor() {
+      const datetime = document.getElementById("datetimeMotor").value;
+      if (!datetime) {
+        alert("Escolhe uma data e hora válidas");
+        return;
+      }
+
+      const selected = new Date(datetime);
+      if (selected <= new Date()) {
+        alert("Escolhe uma data/hora futura");
+        return;
+      }
+
+      const res = await fetch("/agendar_motor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datetime }),
+      });
+      if (res.ok) {
+        alert("Motor agendado para " + selected.toLocaleString());
+        document.getElementById("datetimeMotor").value = "";
+        carregarAgendamentos();
+      } else {
+        alert("Erro ao agendar");
+      }
+    }
+
+    async function carregarAgendamentos() {
+      const res = await fetch("/agendamentos");
+      const agendamentos = await res.json();
+      const container = document.getElementById("agendamentosList");
+      container.innerHTML = "";
+      if (agendamentos.length === 0) {
+        container.textContent = "Nenhum agendamento.";
+        return;
+      }
+      agendamentos.forEach(a => {
+        const div = document.createElement("div");
+        div.className = "agendamento-item";
+        div.innerHTML = `
+          <span>${new Date(a.datetime).toLocaleString()}</span>
+          <button onclick="removerAgendamento('${a.id}')">❌</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function removerAgendamento(id) {
+      const res = await fetch(`/agendamentos/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        carregarAgendamentos();
+      } else {
+        alert("Erro ao remover agendamento");
+      }
+    }
+
+    // Função chamada quando o botão "acessar o live stream" é clicado
+    function openStream() {
+      // Abre o stream em uma nova aba
+      window.open("https://83.212.82.121:8080/", "_blank");
+
+      // Esconde o botão e mostra o stream na página
+      document.getElementById("liveStreamButton").style.display = "none";  // Esconde o botão
+      document.getElementById("stream").style.display = "block";  // Mostra o stream
+    }
+
+    setInterval(() => {
+      atualizarPeso();
+      const img = document.getElementById("foto");
+      if (img) {
+        img.src = "/static/foto.jpg?t=" + new Date().getTime();
+      }
+    }, 2000);
+
+    // Carregar lista inicial
+    carregarAgendamentos();
+  </script>
+</body>
+</html>
